@@ -69,4 +69,7 @@ Secret_Key=你的Secret_Key
 * 作者不保證程式碼的完全正確性或系統的穩定性。
 * 使用本程式進行實盤交易前，請務必自行測試並承擔所有風險。
 
+### 🖼️ 成品展示 (DEMO)
+![Demo](src/demo.png)
+
 Developed by Jason Chou
