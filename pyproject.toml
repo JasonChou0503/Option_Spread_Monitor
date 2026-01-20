@@ -1,0 +1,18 @@
+[project]
+name = "option-spread-monitor"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "dotenv>=0.9.9",
+    "eventlet>=0.40.4",
+    "fastapi>=0.128.0",
+    "flask>=3.1.2",
+    "flask-socketio>=5.6.0",
+    "pandas>=2.3.3",
+    "py-vollib>=1.0.1",
+    "python-dotenv>=1.2.1",
+    "shioaji[speed]>=1.3.1",
+    "uvicorn>=0.40.0",
+]

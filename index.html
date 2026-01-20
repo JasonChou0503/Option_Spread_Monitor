@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spread Monitor</title>
+    <style>
+        :root {
+            --bg: #0f1115; --panel: #181b21; --border: #2d3436;
+            --text: #e0e0e0; --text-dim: #8b949e;
+            --up: #ff4d4d; --down: #00b894;
+            --profit: #fdcb6e; --fut-color: #74b9ff; --idx-color: #a29bfe;
+        }
+        body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; margin: 0; padding: 20px; }
+
+        .dashboard {
+            display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px; align-items: center;
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 12px; padding: 15px 25px; margin-bottom: 25px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .ticker-group { display: flex; flex-direction: column; }
+        .ticker-right { align-items: flex-end; text-align: right; }
+        .label { font-size: 0.85rem; color: var(--text-dim); font-weight: bold; letter-spacing: 1px; }
+        .price { font-size: 2.2rem; font-weight: 700; font-family: 'Roboto Mono', monospace; line-height: 1.1; }
+        .meta { font-size: 0.9rem; color: var(--text-dim); font-family: monospace; margin-top: 4px; }
+        #fut-price { color: var(--fut-color); }
+        #idx-price { color: var(--idx-color); }
+
+        .status-box {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 8px 20px; background: rgba(0,0,0,0.2); border-radius: 8px;
+        }
+        #status-dot { width: 10px; height: 10px; border-radius: 50%; background: #555; margin-bottom: 5px; transition: background 0.3s; }
+        #status-text { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+        .connected #status-dot { background: var(--down); box-shadow: 0 0 8px var(--down); }
+        .connected #status-text { color: var(--down); }
+
+        .date-select {
+            margin-top: 8px; background: #2d3436; color: #fff; border: 1px solid #444;
+            padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; outline: none; cursor: pointer;
+            font-family: monospace;
+        }
+        .date-select:hover { border-color: #666; }
+
+        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .panel { background: var(--panel); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+        .panel-head { padding: 12px; text-align: center; font-weight: bold; text-transform: uppercase; font-size: 0.95rem; letter-spacing: 1px; }
+        .head-call { border-top: 3px solid var(--up); color: var(--up); background: rgba(255, 77, 77, 0.05); }
+        .head-put { border-top: 3px solid var(--down); color: var(--down); background: rgba(0, 184, 148, 0.05); }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th { text-align: right; color: var(--text-dim); padding: 10px 12px; border-bottom: 1px solid var(--border); font-weight: 500; font-size: 0.8rem; }
+        td { padding: 10px 12px; text-align: right; border-bottom: 1px solid #25282e; font-family: 'Roboto Mono', monospace; }
+        
+        .col-leg { text-align: left; color: #ccc; font-family: -apple-system, sans-serif; font-size: 0.85rem; }
+        .col-bid { color: var(--up); }
+        .col-ask { color: var(--down); }
+        .col-net { color: var(--profit); font-weight: bold; font-size: 1.1rem; }
+        
+        .vol-sub { font-size: 0.75rem; color: #666; margin-left: 8px; font-family: sans-serif; font-weight: normal; }
+
+        @keyframes flash { 0% { color: #fff; text-shadow: 0 0 5px #fff; } 100% { color: inherit; } }
+        .updated { animation: flash 0.6s ease-out; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <div class="ticker-group">
+            <span class="label" id="fut-code">TXF --</span>
+            <span class="price" id="fut-price">-----</span>
+            <span class="meta" id="fut-time">Time: --:--:--</span>
+        </div>
+
+        <div class="status-box" id="conn-box">
+            <div id="status-dot"></div>
+            <div id="status-text">Disconnected</div>
+            <select id="date-sel" class="date-select" disabled>
+                <option>Loading...</option>
+            </select>
+        </div>
+
+        <div class="ticker-group ticker-right">
+            <span class="label" id="idx-code">INDEX --</span>
+            <span class="price" id="idx-price">-----</span>
+            <span class="meta" id="idx-time">Time: --:--:--</span>
+        </div>
+    </div>
+
+    <div class="grid-container">
+        <div class="panel">
+            <div class="panel-head head-call">Bearish Call Spreads</div>
+            <table id="tbl-call">
+                <thead>
+                    <tr><th style="text-align:left">Short Leg (Sell)</th><th>Bid</th><th style="text-align:left; padding-left:20px;">Long Leg (Buy)</th><th>Ask</th><th>Net</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="panel">
+            <div class="panel-head head-put">Bullish Put Spreads</div>
+            <table id="tbl-put">
+                <thead>
+                    <tr><th style="text-align:left">Short Leg (Sell)</th><th>Bid</th><th style="text-align:left; padding-left:20px;">Long Leg (Buy)</th><th>Ask</th><th>Net</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const WS_URL = "ws://" + location.host + "/ws";
+        const cache = {}; 
+        let strategies = [];
+        
+        const dom = {
+            futPrice: document.getElementById('fut-price'), futCode: document.getElementById('fut-code'), futTime: document.getElementById('fut-time'),
+            idxPrice: document.getElementById('idx-price'), idxCode: document.getElementById('idx-code'), idxTime: document.getElementById('idx-time'),
+            connBox: document.getElementById('conn-box'), statusText: document.getElementById('status-text'),
+            dateSel: document.getElementById('date-sel'),
+            callBody: document.querySelector('#tbl-call tbody'), putBody: document.querySelector('#tbl-put tbody')
+        };
+
+        dom.dateSel.addEventListener('change', function() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "change_date", date: this.value }));
+                this.disabled = true;
+                dom.statusText.innerText = "Switching...";
+            }
+        });
+
+        let ws;
+        function connect() {
+            ws = new WebSocket(WS_URL);
+            ws.onopen = () => { 
+                dom.connBox.classList.add('connected'); 
+                dom.statusText.innerText = "Connected"; 
+            };
+            ws.onclose = () => { 
+                dom.connBox.classList.remove('connected'); 
+                dom.statusText.innerText = "Reconnecting..."; 
+                dom.dateSel.disabled = true;
+                setTimeout(connect, 3000); 
+            };
+            ws.onmessage = (e) => {
+                const d = JSON.parse(e.data);
+                if (d.type === 'bidask') updateBidAsk(d);
+                else if (d.type === 'future') updateTicker(d, 'fut');
+                else if (d.type === 'index') updateTicker(d, 'idx'); 
+                else if (d.type === 'config') initConfig(d);
+            };
+        }
+
+        function initConfig(data) {
+            strategies = data.strategies;
+            dom.callBody.innerHTML = ""; dom.putBody.innerHTML = "";
+            strategies.forEach((st, idx) => {
+                if(!cache[st.short_code]) cache[st.short_code] = {bid:0, ask:0};
+                if(!cache[st.long_code]) cache[st.long_code] = {bid:0, ask:0};
+                const tr = document.createElement('tr');
+                const sName = st.short_desc || st.short_code; 
+                const lName = st.long_desc || st.long_code;
+                
+                // 修改：在價格 span 旁邊增加一個量的 span，並套用 vol-sub 樣式
+                tr.innerHTML = `
+                    <td class="col-leg">${sName}</td>
+                    <td class="col-bid">
+                        <span id="bid-${st.short_code}">-</span>
+                        <span id="bid-vol-${st.short_code}" class="vol-sub"></span>
+                    </td>
+                    <td class="col-leg" style="padding-left:20px;">${lName}</td>
+                    <td class="col-ask">
+                        <span id="ask-${st.long_code}">-</span>
+                        <span id="ask-vol-${st.long_code}" class="vol-sub"></span>
+                    </td>
+                    <td class="col-net" id="net-${idx}">-</td>
+                `;
+                (st.side === 'Call' ? dom.callBody : dom.putBody).appendChild(tr);
+            });
+
+            if (data.available_dates && data.current_date) {
+                dom.dateSel.innerHTML = "";
+                data.available_dates.forEach(date => {
+                    const opt = document.createElement('option');
+                    opt.value = date; opt.innerText = date;
+                    if (date === data.current_date) opt.selected = true;
+                    dom.dateSel.appendChild(opt);
+                });
+                dom.dateSel.disabled = false;
+                dom.statusText.innerText = "Connected";
+            }
+        }
+
+        function updateBidAsk(d) {
+            const c = d.code;
+            if(!cache[c]) cache[c] = {bid:0, ask:0};
+            if(d.bid) cache[c].bid = d.bid;
+            if(d.ask) cache[c].ask = d.ask;
+            
+            // 更新價格
+            updateCell(`bid-${c}`, d.bid);
+            updateCell(`ask-${c}`, d.ask);
+
+            // 更新量
+            updateVol(`bid-vol-${c}`, d.bid_vol);
+            updateVol(`ask-vol-${c}`, d.ask_vol);
+
+            strategies.forEach((st, idx) => {
+                if(st.short_code === c || st.long_code === c) calcSpread(st, idx);
+            });
+        }
+
+        function updateCell(id, val) {
+            const el = document.getElementById(id);
+            if(el && val) { el.innerText = val.toFixed(1); flash(el); }
+        }
+
+        function updateVol(id, val) {
+            const el = document.getElementById(id);
+            if(el && val !== undefined) { 
+                el.innerText = val; 
+            }
+        }
+
+        function calcSpread(st, idx) {
+            const sBid = cache[st.short_code].bid;
+            const lAsk = cache[st.long_code].ask;
+            if(sBid && lAsk) {
+                const net = sBid - lAsk;
+                const el = document.getElementById(`net-${idx}`);
+                if(el) {
+                    el.innerText = net.toFixed(1);
+                    el.style.color = net >= 0 ? "var(--profit)" : "#7f8fa6";
+                    flash(el);
+                }
+            }
+        }
+
+        function updateTicker(d, prefix) {
+            const elP = document.getElementById(`${prefix}-price`);
+            if(elP) {
+                document.getElementById(`${prefix}-code`).innerText = d.code;
+                elP.innerText = d.price; 
+                const timeStr = d.time.split(' ')[1] || d.time;
+                document.getElementById(`${prefix}-time`).innerText = timeStr;
+                flash(elP);
+            }
+        }
+
+        function flash(el) {
+            el.classList.remove('updated');
+            void el.offsetWidth;
+            el.classList.add('updated');
+        }
+
+        connect();
+    </script>
+</body>
+</html>
